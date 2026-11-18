@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Battle Box Builder — parametric tray</title>
+<link rel="stylesheet" href="style.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "manifold-3d": "https://cdn.jsdelivr.net/npm/manifold-3d@3.5.5/manifold.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <h1>Battle Box Builder</h1>
+    <p class="sub">Original 234 × 150 mm interlock kept · compartments, grid or free-drawn</p>
+
+    <div class="seg" id="modes">
+      <button id="mode-grid" class="on">Grid</button>
+      <button id="mode-draw">Draw</button>
+    </div>
+
+    <label class="ctl">
+      <span>Height <b id="v-height">37.5</b> mm</span>
+      <input type="range" id="height" min="20" max="120" step="0.5" value="37.5" />
+    </label>
+
+    <div id="gridctl">
+      <label class="ctl">
+        <span>Columns <b id="v-cols">1</b></span>
+        <input type="range" id="cols" min="1" max="8" step="1" value="1" />
+      </label>
+
+      <label class="ctl">
+        <span>Rows <b id="v-rows">1</b></span>
+        <input type="range" id="rows" min="1" max="8" step="1" value="1" />
+      </label>
+
+      <label class="ctl">
+        <span>Divider thickness <b id="v-divider">2.4</b> mm</span>
+        <input type="range" id="divider" min="1.2" max="8" step="0.2" value="2.4" />
+      </label>
+
+      <label class="ctl">
+        <span>Wall clearance <b id="v-margin">1.0</b> mm</span>
+        <input type="range" id="margin" min="0" max="8" step="0.2" value="1.0" />
+      </label>
+    </div>
+
+    <div id="drawctl" hidden>
+      <label class="ctl">
+        <span>Pocket depth <b id="v-depth">full</b></span>
+        <input type="range" id="depth" min="3" max="30" step="0.5" value="30" />
+      </label>
+
+      <div class="seg" id="shapes">
+        <button id="shape-rect" class="on">Rectangle</button>
+        <button id="shape-round">Round</button>
+      </div>
+
+      <canvas id="plan"></canvas>
+      <p class="hint2">drag on the plan to cut a pocket · double-click one to delete</p>
+
+      <div class="prow">
+        <b id="pcount">0 pockets</b>
+        <span>
+          <button id="undo" class="mini" disabled>Undo</button>
+          <button id="clear" class="mini" disabled>Clear</button>
+        </span>
+      </div>
+    </div>
+
+    <label class="chk"><input type="checkbox" id="showLid" checked /> Show lid</label>
+    <label class="chk"><input type="checkbox" id="showWire" /> Show grid lines</label>
+
+    <div id="stats">
+      <div><span>Size</span><b id="s-size">—</b></div>
+      <div><span>Plastic</span><b id="s-vol">—</b></div>
+      <div><span>Pocket</span><b id="s-pocket">—</b></div>
+      <div><span>Triangles</span><b id="s-tris">—</b></div>
+    </div>
+
+    <div class="btns">
+      <button id="dl-tray" class="primary">Download tray STL</button>
+      <button id="dl-lid">Download lid STL</button>
+      <button id="reset">Reset</button>
+    </div>
+
+    <p id="status" class="status">loading parts…</p>
+  </aside>
+  <main id="view"><div id="hint">drag to orbit · scroll to zoom</div></main>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
