@@ -1,5 +1,7 @@
 # Battle Box Builder
 
+Live: https://integy.github.io/battle-box-builder/
+
 Parametric web app for the 234 × 150 mm **Battle Box** tray + lid.
 
 The two original parts (`Battle-Box-Tray-High.stl`, `Battle-Box-Lid-Blank.stl`) are used as
