@@ -9,7 +9,8 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
-#app { display: grid; grid-template-columns: 300px 1fr; height: 100%; }
+#app { display: grid; grid-template-columns: 320px 1fr; height: 100%; transition: grid-template-columns .15s ease; }
+#app.drawing { grid-template-columns: 470px 1fr; }
 #panel { background: var(--panel); border-right: 1px solid var(--line); padding: 18px 16px;
   overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 h1 { font-size: 15px; margin: 0; letter-spacing: .02em; }
@@ -37,6 +38,7 @@ button:disabled { opacity: .45; cursor: default; }
 @media (max-width: 760px) {
   #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   #panel { border-right: 0; border-bottom: 1px solid var(--line); max-height: 46vh; }
+  #app.drawing { grid-template-columns: 1fr; }
 }
 
 /* segmented control */
@@ -45,7 +47,8 @@ button:disabled { opacity: .45; cursor: default; }
 .seg button.on { background: #24354a; border-color: var(--accent); color: #cfe6ff; }
 
 /* draw-mode plan editor */
-#plan { width: 100%; height: auto; display: block; border: 1px solid var(--line);
+#planwrap { width: 100%; }
+#plan { width: 100%; height: auto; aspect-ratio: 234 / 150; display: block; border: 1px solid var(--line);
   border-radius: 8px; background: #0b0f14; touch-action: none; cursor: crosshair; }
 .hint2 { margin: 0; color: #63758a; font-size: 10.5px; line-height: 1.35; }
 .prow { display: flex; justify-content: space-between; align-items: center;

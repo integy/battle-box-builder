@@ -18,7 +18,7 @@ const CAVITY_FLOOR = 2.5;
 const PLA_DENSITY = 1.24;   // g/cm³
 
 const state = { height: ORIGINAL_H, cols: 1, rows: 1, divider: 2.4, margin: 1.0,
-                showLid: true, showWire: false,
+                showLid: true, showSolid: false,
                 mode: 'grid', shape: 'rect', pockets: [], pocketDepth: null };
 // pockets: { kind:'rect'|'round', cx, cy, w, h }  (model mm, y-up, centred on the footprint)
 // pocketDepth: null = full depth down to the interior floor
@@ -49,13 +49,87 @@ grid.rotation.x = Math.PI / 2; grid.position.z = -0.2; scene.add(grid);
 
 const matBody = new THREE.MeshStandardMaterial({ color: 0x9fb4c9, roughness: 0.6, metalness: 0.12, side: THREE.DoubleSide });
 const matLid = new THREE.MeshStandardMaterial({ color: 0x6f8497, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
-const matWire = new THREE.MeshBasicMaterial({ color: 0x2b3a4a, wireframe: true, transparent: true, opacity: 0.5 });
+/* --- point-cloud view: round dots instead of shaded surfaces --------------- */
+function dotTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 31);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(32, 32, 31, 0, Math.PI * 2); ctx.fill();
+  return new THREE.CanvasTexture(c);
+}
+const DOT_TEX = dotTexture();
+const matPoints = new THREE.PointsMaterial({
+  color: 0xa9c6dd, size: 1.9, sizeAttenuation: true, map: DOT_TEX,
+  transparent: true, opacity: 0.95, depthWrite: false, alphaTest: 0.02,
+});
+const matPointsLid = matPoints.clone();
+matPointsLid.color = new THREE.Color(0x69809a);
+matPointsLid.size = 1.9;
+
+const POINT_TARGET = 42000;         // sample budget per surface
+let rngState = 0x9e3779b9;
+function rnd() {
+  rngState ^= rngState << 13; rngState ^= rngState >>> 17; rngState ^= rngState << 5;
+  return (rngState >>> 0) / 4294967296;
+}
+
+/* area-weighted surface sampling of a triangle soup — stable point cloud */
+function pointGeometry(geometry) {
+  const pos = geometry.attributes.position;
+  const idx = geometry.index;
+  const triCount = Math.floor((idx ? idx.count : pos.count) / 3);
+  rngState = 0x9e3779b9;
+  const p = new THREE.Vector3(), q = new THREE.Vector3(), s = new THREE.Vector3();
+  const vAt = (i, v) => v.fromBufferAttribute(pos, idx ? idx.getX(i) : i);
+
+  const areas = new Float32Array(triCount);
+  let total = 0;
+  for (let t = 0; t < triCount; t++) {
+    vAt(3 * t, p); vAt(3 * t + 1, q); vAt(3 * t + 2, s);
+    areas[t] = q.clone().sub(p).cross(s.clone().sub(p)).length() * 0.5;
+    total += areas[t];
+  }
+  const perMM2 = POINT_TARGET / Math.max(total, 1e-6);
+  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), pt = new THREE.Vector3();
+  const out = [];
+  for (let t = 0; t < triCount; t++) {
+    if (areas[t] <= 0) continue;
+    vAt(3 * t, p); vAt(3 * t + 1, q); vAt(3 * t + 2, s);
+    ab.copy(q).sub(p); ac.copy(s).sub(p);
+    const n = Math.min(40, Math.max(1, Math.round(areas[t] * perMM2)));
+    for (let i = 0; i < n; i++) {
+      let u = rnd(), v = rnd();
+      if (u + v > 1) { u = 1 - u; v = 1 - v; }
+      pt.copy(p).addScaledVector(ab, u).addScaledVector(ac, v);
+      out.push(pt.x, pt.y, pt.z);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  g.computeBoundingBox();
+  return g;
+}
 
 const bodyMesh = new THREE.Mesh(new THREE.BufferGeometry(), matBody);
 const lidMesh = new THREE.Mesh(new THREE.BufferGeometry(), matLid);
-const wireMesh = new THREE.Mesh(new THREE.BufferGeometry(), matWire);
-wireMesh.visible = false;
-scene.add(bodyMesh, lidMesh, wireMesh);
+const bodyPoints = new THREE.Points(new THREE.BufferGeometry(), matPoints);
+const lidPoints = new THREE.Points(new THREE.BufferGeometry(), matPointsLid);
+bodyMesh.visible = false;           // point view is the default
+scene.add(bodyMesh, lidMesh, bodyPoints, lidPoints);
+
+function setBodyPoints(geometry) {
+  bodyPoints.geometry.dispose();
+  bodyPoints.geometry = pointGeometry(geometry);
+}
+function setLidPoints(geometry) {
+  lidPoints.geometry.dispose();
+  lidPoints.geometry = pointGeometry(geometry);
+}
 
 function resize() {
   const w = view.clientWidth, h = view.clientHeight;
@@ -226,7 +300,7 @@ function rebuild() {
     const geom = manifoldToGeometry(tray);
     bodyMesh.geometry.dispose();
     bodyMesh.geometry = geom;
-    wireMesh.geometry = geom;
+    setBodyPoints(geom);
 
     const size = geom.boundingBox.getSize(new THREE.Vector3());
     const cm3 = tray.volume() / 1000;
@@ -241,7 +315,9 @@ function rebuild() {
     if (state.mode === 'draw') updateDepthUI();
 
     lidMesh.position.set(0, 0, state.height + 0.4);
-    lidMesh.visible = state.showLid;
+    lidPoints.position.copy(lidMesh.position);
+    lidMesh.visible = state.showLid && state.showSolid;   // solid lid only in solid view
+    lidPoints.visible = state.showLid;
     frameCamera(size);
     setStatus(`rebuilt in ${((performance.now() - t0) / 1000).toFixed(2)} s · manifold solid`);
   } catch (err) {
@@ -320,10 +396,16 @@ for (const [id, keyName, fmt] of bindings) {
 }
 
 document.getElementById('showLid').addEventListener('change', (e) => {
-  state.showLid = e.target.checked; lidMesh.visible = state.showLid;
+  state.showLid = e.target.checked;
+  lidMesh.visible = state.showLid && state.showSolid;
+  lidPoints.visible = state.showLid;
 });
-document.getElementById('showWire').addEventListener('change', (e) => {
-  state.showWire = e.target.checked; wireMesh.visible = e.target.checked;
+document.getElementById('showSolid').addEventListener('change', (e) => {
+  state.showSolid = e.target.checked;
+  bodyMesh.visible = state.showSolid;
+  lidMesh.visible = state.showLid && state.showSolid;
+  matPoints.opacity = state.showSolid ? 0.22 : 0.95;
+  matPointsLid.opacity = state.showSolid ? 0.22 : 0.95;
 });
 document.getElementById('dl-tray').addEventListener('click', () => {
   const h = state.height.toFixed(1).replace('.', 'p');
@@ -358,6 +440,7 @@ function setMode(mode) {
   elDraw.hidden = mode !== 'draw';
   btnModeGrid.classList.toggle('on', mode === 'grid');
   btnModeDraw.classList.toggle('on', mode === 'draw');
+  document.getElementById('app').classList.toggle('drawing', mode === 'draw');
   if (mode === 'draw') { drawPlan(); updateDepthUI(); }
   framed = false;
   schedule();
@@ -377,7 +460,7 @@ btnShapeRound.addEventListener('click', () => { state.shape = 'round'; updateSha
 /* ------------------------------------------------------- plan editor (2D) */
 const plan = document.getElementById('plan');
 const ctx = plan.getContext('2d');
-const PLAN = { W: 468, H: 300, s: 2 };            // 2 px per mm, footprint 234 × 150
+const PLAN = { W: 702, H: 450, s: 3 };            // 3 px per mm, footprint 234 × 150
 
 const px = (x) => (x + 117) * PLAN.s;
 const py = (y) => (75 - y) * PLAN.s;
@@ -596,6 +679,7 @@ window.__bbx = {
     bandMesh = geomToManifoldMesh(bandGeom);
     lidGeom = lidGeomLocal;
     lidMesh.geometry = lidGeom;
+    setLidPoints(lidGeom);
     outerLoop = wall.outer;
     innerLoop = wall.inner;
 
